@@ -1,0 +1,930 @@
+library(shiny)
+library(GEOquery)
+library(limma)
+library(dplyr)
+library(DT)
+library(ggplot2)
+
+ui <- navbarPage(
+  title = "ARTHOMICS",
+  
+  tabPanel("Home",
+           tags$div(
+             style = "text-align: center; padding-top: 40px;",
+             tags$h1("ARTHOMICS", style = "font-size: 50px; color = #7D3C98; font-weight: bold;"),
+             tags$p("Welcome to the ARTHOMICS DEG Analysis App. Use the tabs above to explore datasets.")
+           )
+  ),
+  
+  tabPanel("Transcriptomics",
+           tabsetPanel(
+             tabPanel("GSE272",
+                      sidebarLayout(
+                        sidebarPanel(
+                          sliderInput("logfc_272", "Minimum |log2FC|:", min = 0, max = 2, value = 0.1, step = 0.1),
+                          sliderInput("adjpval_272", "Adjusted P-value cutoff:", min = 0.001, max = 0.2, value = 0.05, step = 0.01),
+                          actionButton("analyze_272", "Run DEG Analysis", 
+                                       style = "background-color: green; color: white; font-weight: bold; width: 100%; margin-bottom: 20px;")
+                        ),
+                        mainPanel(
+                          tabsetPanel(
+                            tabPanel("Expression Matrix", DTOutput("exprs_table_272")),
+                            tabPanel("Sample Metadata", DTOutput("pheno_table_272")),
+                            tabPanel("DE Results (Female)", 
+                                     DTOutput("female_de_272"),
+                                     br(),
+                                     plotOutput("volcano_female_272", height = "400px"),
+                                     textOutput("female_counts_272"),
+                                     fluidRow(
+                                       column(6, downloadButton("download_female_272", "Download Female DEGs",
+                                                                style = "background-color:#D8BFD8; color:#000; font-weight:bold; width: 95%;")),
+                                       column(6, downloadButton("download_volcano_female_272", "Download Female Volcano Plot",
+                                                                style = "background-color:#D8BFD8; color:#000; font-weight:bold; width: 95%;"))
+                                     ),
+                                     br()
+                            ),
+                            tabPanel("DE Results (Male)", 
+                                     DTOutput("male_de_272"),
+                                     br(),
+                                     plotOutput("volcano_male_272", height = "400px"),
+                                     textOutput("male_counts_272"),
+                                     fluidRow(
+                                       column(6, downloadButton("download_male_272", "Download Male DEGs",
+                                                                style = "background-color:#D8BFD8; color:#000; font-weight:bold; width: 95%;")),
+                                       column(6, downloadButton("download_volcano_male_272", "Download Male Volcano Plot",
+                                                                style = "background-color:#D8BFD8; color:#000; font-weight:bold; width: 95%;"))
+                                     ),
+                                     br()
+                            )
+                          )
+                        )
+                      )
+             ),
+             
+             tabPanel("GSE55457",
+                      sidebarLayout(
+                        sidebarPanel(
+                          sliderInput("logfc_55457", "Minimum |log2FC|:", min = 0, max = 2, value = 1, step = 0.1),
+                          sliderInput("adjpval_55457", "Adjusted P-value cutoff:", min = 0.001, max = 0.2, value = 0.05, step = 0.01),
+                          actionButton("analyze_55457", "Run DEG Analysis",
+                                       style = "background-color: green; color: white; font-weight: bold; width: 100%; margin-bottom: 20px;")
+                        ),
+                        mainPanel(
+                          tabsetPanel(
+                            tabPanel("Expression Matrix", DTOutput("exprs_table_55457")),
+                            tabPanel("Sample Metadata", DTOutput("pheno_table_55457")),
+                            tabPanel("DE Results (Female)", 
+                                     DTOutput("female_de_55457"),
+                                     br(),
+                                     plotOutput("volcano_female_55457", height = "400px"),
+                                     textOutput("female_counts_55457"),
+                                     fluidRow(
+                                       column(6, downloadButton("download_female_55457", "Download Female DEGs",
+                                                                style = "background-color:#D8BFD8; color:#000; font-weight:bold; width: 95%;")),
+                                       column(6, downloadButton("download_volcano_female_55457", "Download Female Volcano Plot",
+                                                                style = "background-color:#D8BFD8; color:#000; font-weight:bold; width: 95%;"))
+                                     ),
+                                     br()
+                            ),
+                            tabPanel("DE Results (Male)", 
+                                     DTOutput("male_de_55457"),
+                                     br(),
+                                     plotOutput("volcano_male_55457", height = "400px"),
+                                     textOutput("male_counts_55457"),
+                                     fluidRow(
+                                       column(6, downloadButton("download_male_55457", "Download Male DEGs",
+                                                                style = "background-color:#D8BFD8; color:#000; font-weight:bold; width: 95%;")),
+                                       column(6, downloadButton("download_volcano_male_55457", "Download Male Volcano Plot",
+                                                                style = "background-color:#D8BFD8; color:#000; font-weight:bold; width: 95%;"))
+                                     ),
+                                     br()
+                            )
+                          )
+                        )
+                      )
+             ),
+             
+             tabPanel("GSE010",
+                      sidebarLayout(
+                        sidebarPanel(
+                          sliderInput("logfc_010", "Minimum |log2FC|:", min = 0, max = 2, value = 1, step = 0.1),
+                          sliderInput("adjpval_010", "Adjusted P-value cutoff:", min = 0.001, max = 0.2, value = 0.05, step = 0.01),
+                          actionButton("analyze_010", "Run DEG Analysis",
+                                       style = "background-color: green; color: white; font-weight: bold; width: 100%; margin-bottom: 20px;")
+                        ),
+                        mainPanel(
+                          tabsetPanel(
+                            tabPanel("Expression Matrix", DTOutput("exprs_table_010")),
+                            tabPanel("Sample Metadata", DTOutput("pheno_table_010")),
+                            tabPanel("DE Results (Female)", 
+                                     DTOutput("female_de_010"),
+                                     br(),
+                                     plotOutput("volcano_female_010", height = "400px"),
+                                     textOutput("female_counts_010"),
+                                     fluidRow(
+                                       column(6, downloadButton("download_female_010", "Download Female DEGs",
+                                                                style = "background-color:#D8BFD8; color:#000; font-weight:bold; width: 95%;")),
+                                       column(6, downloadButton("download_volcano_female_010", "Download Female Volcano Plot",
+                                                                style = "background-color:#D8BFD8; color:#000; font-weight:bold; width: 95%;"))
+                                     ),
+                                     br()
+                            ),
+                            tabPanel("DE Results (Male)", 
+                                     DTOutput("male_de_010"),
+                                     br(),
+                                     plotOutput("volcano_male_010", height = "400px"),
+                                     textOutput("male_counts_010"),
+                                     fluidRow(
+                                       column(6, downloadButton("download_male_010", "Download Male DEGs",
+                                                                style = "background-color:#D8BFD8; color:#000; font-weight:bold; width: 95%;")),
+                                       column(6, downloadButton("download_volcano_male_010", "Download Male Volcano Plot",
+                                                                style = "background-color:#D8BFD8; color:#000; font-weight:bold; width: 95%;"))
+                                     ),
+                                     br()
+                            )
+                          )
+                        )
+                      )
+             ),
+             
+             tabPanel("GSE12021",
+                      sidebarLayout(
+                        sidebarPanel(
+                          sliderInput("logfc_12021", "Minimum |log2FC|:", min = 0, max = 2, value = 1, step = 0.1),
+                          sliderInput("adjpval_12021", "Adjusted P-value cutoff:", min = 0.001, max = 0.2, value = 0.05, step = 0.01),
+                          actionButton("analyze_12021", "Run DEG Analysis",
+                                       style = "background-color: green; color: white; font-weight: bold; width: 100%; margin-bottom: 20px;")
+                        ),
+                        mainPanel(
+                          tabsetPanel(
+                            tabPanel("Expression Matrix", DTOutput("exprs_table_12021")),
+                            tabPanel("Sample Metadata", DTOutput("pheno_table_12021")),
+                            tabPanel("DE Results (Female)",
+                                     DTOutput("female_de_12021"),
+                                     br(),
+                                     plotOutput("volcano_female_12021", height = "400px"),
+                                     textOutput("female_counts_12021"),
+                                     fluidRow(
+                                       column(6, downloadButton("download_female_12021", "Download Female DEGs",
+                                                                style = "background-color:#D8BFD8; color:#000; font-weight:bold; width: 95%;")),
+                                       column(6, downloadButton("download_volcano_female_12021", "Download Female Volcano Plot",
+                                                                style = "background-color:#D8BFD8; color:#000; font-weight:bold; width: 95%;"))
+                                     ),
+                                     br()
+                            ),
+                            tabPanel("DE Results (Male)",
+                                     DTOutput("male_de_12021"),
+                                     br(),
+                                     plotOutput("volcano_male_12021", height = "400px"),
+                                     textOutput("male_counts_12021"),
+                                     fluidRow(
+                                       column(6, downloadButton("download_male_12021", "Download Male DEGs",
+                                                                style = "background-color:#D8BFD8; color:#000; font-weight:bold; width: 95%;")),
+                                       column(6, downloadButton("download_volcano_male_12021", "Download Male Volcano Plot",
+                                                                style = "background-color:#D8BFD8; color:#000; font-weight:bold; width: 95%;"))
+                                     ),
+                                     br()
+                            )
+                          )
+                        )
+                      )
+             )
+           )
+  ),
+  
+  tabPanel("Methylomics",
+           tabsetPanel(
+             tabPanel("GSE12345",  # Replace with your methylation dataset ID
+                      sidebarLayout(
+                        sidebarPanel(
+                          sliderInput("logfc_methyl", "Minimum |log2FC|:", min = 0, max = 2, value = 1, step = 0.1),
+                          sliderInput("adjpval_methyl", "Adjusted P-value cutoff:", min = 0.001, max = 0.2, value = 0.05, step = 0.01),
+                          actionButton("analyze_methyl", "Run DEG Analysis",
+                                       style = "background-color: green; color: white; font-weight: bold; width: 100%; margin-bottom: 20px;")
+                        ),
+                        mainPanel(
+                          tabsetPanel(
+                            tabPanel("Expression Matrix", DTOutput("exprs_table_methyl")),
+                            tabPanel("Sample Metadata", DTOutput("pheno_table_methyl")),
+                            tabPanel("DE Results",
+                                     DTOutput("de_methyl"),
+                                     br(),
+                                     plotOutput("volcano_methyl", height = "400px"),
+                                     textOutput("counts_methyl"),
+                                     fluidRow(
+                                       column(6, downloadButton("download_de_methyl", "Download DEGs",
+                                                                style = "background-color:#D8BFD8; color:#000; font-weight:bold; width: 95%;")),
+                                       column(6, downloadButton("download_volcano_methyl", "Download Volcano Plot",
+                                                                style = "background-color:#D8BFD8; color:#000; font-weight:bold; width: 95%;"))
+                                     ),
+                                     br()
+                            )
+                          )
+                        )
+                      )
+             )
+           )
+  )
+)
+
+             
+
+
+server <- function(input, output, session) {
+  
+  plot_volcano <- function(deg_df, logfc_cut, adjp_cut, title_text) {
+    deg_df <- deg_df[!is.na(deg_df$logFC) & !is.na(deg_df$adj.P.Val) & deg_df$gene_symbol != "", ]
+    deg_df <- deg_df[(deg_df$logFC > logfc_cut & deg_df$adj.P.Val < adjp_cut) | 
+                       (deg_df$logFC < -logfc_cut & deg_df$adj.P.Val < adjp_cut), ]
+    
+    deg_df$Significance <- ifelse(deg_df$logFC > 0, "Upregulated", "Downregulated")
+    deg_df <- deg_df[!is.na(deg_df$Significance), ]
+    deg_df$Significance <- factor(deg_df$Significance, levels = c("Upregulated", "Downregulated"))
+    
+    up_top5 <- head(deg_df[deg_df$Significance == "Upregulated", ][order(-deg_df$logFC), ], 5)
+    down_top5 <- head(deg_df[deg_df$Significance == "Downregulated", ][order(deg_df$logFC), ], 5)
+    top_labels <- rbind(up_top5, down_top5)
+    top_labels <- top_labels[!is.na(top_labels$gene_symbol), ]
+    
+    up_count <- sum(deg_df$Significance == "Upregulated")
+    down_count <- sum(deg_df$Significance == "Downregulated")
+    
+    ggplot(deg_df, aes(x = logFC, y = -log10(adj.P.Val), color = Significance)) +
+      geom_point(alpha = 0.6) +
+      geom_vline(xintercept = c(-logfc_cut, logfc_cut), linetype = "dashed", color = "black") +
+      geom_hline(yintercept = -log10(adjp_cut), linetype = "dashed", color = "black") +
+      geom_text(data = top_labels, aes(label = gene_symbol), vjust = -1, size = 4, show.legend = FALSE) +
+      scale_color_manual(values = c("Upregulated" = "red", "Downregulated" = "blue")) +
+      theme_minimal() +
+      labs(
+        x = "log2 Fold Change", 
+        y = "-log10 Adjusted P-value",
+        title = paste0(title_text, " - Upregulated: ", up_count, " | Downregulated: ", down_count),
+        color = "Legend"
+      ) +
+      theme(
+        plot.title = element_text(hjust = 0.5, face = "bold"),
+        legend.title = element_text(size = 10),
+        legend.text = element_text(size = 9),
+        legend.key.size = unit(0.3, "cm"),
+        legend.spacing.y = unit(0.1, "cm"),
+        legend.box.spacing = unit(0.2, "cm"),
+        legend.position = "right"
+      )
+  }
+  
+  
+  
+  ####### GSE272 DATA #######
+  gse_272 <- getGEO("GSE93272", GSEMatrix = TRUE, AnnotGPL = TRUE)
+  gse_data_272 <- gse_272[[1]]
+  exprs_data_272 <- exprs(gse_data_272)
+  pheno_data_272 <- pData(gse_data_272)
+  feature_data_272 <- fData(gse_data_272)
+  
+  exprs_data_272 <- exprs_data_272[complete.cases(exprs_data_272), ]
+  exprs_data_272 <- exprs_data_272[apply(exprs_data_272, 1, var) > 0.01, ]
+  exprs_data_272 <- log2(exprs_data_272 + 1)
+  threshold_272 <- quantile(rowMeans(exprs_data_272), 0.25)
+  exprs_data_272 <- exprs_data_272[rowMeans(exprs_data_272) > threshold_272, ]
+  
+  exprs_annotated_272 <- data.frame(probe_id = rownames(exprs_data_272), exprs_data_272, stringsAsFactors = FALSE)
+  exprs_annotated_272$gene_symbol <- sapply(strsplit(feature_data_272[rownames(exprs_data_272), "Gene symbol"], "///", fixed = TRUE), `[`, 1)
+  
+  output$exprs_table_272 <- renderDT({ datatable(head(exprs_annotated_272, 20), options = list(scrollX = TRUE)) })
+  output$pheno_table_272 <- renderDT({ datatable(head(pheno_data_272, 20), options = list(scrollX = TRUE)) })
+  
+  female_deg_data_272 <- reactiveVal(NULL)
+  male_deg_data_272 <- reactiveVal(NULL)
+  
+  observeEvent(input$analyze_272, {
+    exprs_only <- exprs_annotated_272[, !(colnames(exprs_annotated_272) %in% c("probe_id", "gene_symbol"))]
+    
+    # Female DEG
+    female_samples <- pheno_data_272$`gender:ch1` == "F"
+    pheno_female <- pheno_data_272[female_samples, ]
+    group_female <- factor(pheno_female$`disease state:ch1`)
+    design_female <- model.matrix(~ 0 + group_female)
+    colnames(design_female) <- make.names(colnames(design_female))
+    contrast_female <- makeContrasts(RA_vs_Control = group_femaleRA - group_femalehealthy.control, levels = design_female)
+    fit_female <- lmFit(exprs_only[, female_samples], design_female)
+    fit2_female <- contrasts.fit(fit_female, contrast_female)
+    fit2_female <- eBayes(fit2_female)
+    res_female <- topTable(fit2_female, number = Inf, adjust.method = "fdr")
+    res_female$probe_id <- rownames(res_female)
+    res_female$gene_symbol <- exprs_annotated_272[res_female$probe_id, "gene_symbol"]
+    filtered_female <- res_female[res_female$adj.P.Val < input$adjpval_272 & abs(res_female$logFC) > input$logfc_272, ]
+    female_deg_data_272(filtered_female)
+    
+    # Male DEG
+    male_samples <- pheno_data_272$`gender:ch1` == "M"
+    pheno_male <- pheno_data_272[male_samples, ]
+    group_male <- factor(pheno_male$`disease state:ch1`)
+    design_male <- model.matrix(~ 0 + group_male)
+    colnames(design_male) <- make.names(colnames(design_male))
+    contrast_male <- makeContrasts(RA_vs_Control = group_maleRA - group_malehealthy.control, levels = design_male)
+    fit_male <- lmFit(exprs_only[, male_samples], design_male)
+    fit2_male <- contrasts.fit(fit_male, contrast_male)
+    fit2_male <- eBayes(fit2_male)
+    res_male <- topTable(fit2_male, number = Inf, adjust.method = "fdr")
+    res_male$probe_id <- rownames(res_male)
+    res_male$gene_symbol <- exprs_annotated_272[res_male$probe_id, "gene_symbol"]
+    filtered_male <- res_male[res_male$adj.P.Val < input$adjpval_272 & abs(res_male$logFC) > input$logfc_272, ]
+    male_deg_data_272(filtered_male)
+  })
+  
+  output$female_de_272 <- renderDT({
+    req(female_deg_data_272())
+    datatable(female_deg_data_272(), options = list(scrollX = TRUE))
+  })
+  
+  output$volcano_female_272 <- renderPlot({
+    req(female_deg_data_272())
+    plot_volcano(female_deg_data_272(), input$logfc_272, input$adjpval_272, "Volcano Plot Female GSE272")
+  })
+  
+  output$female_counts_272 <- renderText({
+    df <- female_deg_data_272()
+    req(df)
+    paste0("Total Female DEGs: ", nrow(df), 
+           " | Upregulated: ", sum(df$logFC > 0), 
+           " | Downregulated: ", sum(df$logFC < 0))
+  })
+  
+  output$download_female_272 <- downloadHandler(
+    filename = function() paste0("GSE272_Female_DEGs_", Sys.Date(), ".csv"),
+    content = function(file) write.csv(female_deg_data_272(), file, row.names = FALSE)
+  )
+  
+  output$download_volcano_female_272 <- downloadHandler(
+    filename = function() paste0("GSE272_Female_Volcano_", Sys.Date(), ".png"),
+    content = function(file) {
+      png(file, width = 900, height = 700)
+      print(plot_volcano(female_deg_data_272(), input$logfc_272, input$adjpval_272, "Volcano Plot Female GSE272"))
+      dev.off()
+    }
+  )
+  
+  output$male_de_272 <- renderDT({
+    req(male_deg_data_272())
+    datatable(male_deg_data_272(), options = list(scrollX = TRUE))
+  })
+  
+  output$volcano_male_272 <- renderPlot({
+    req(male_deg_data_272())
+    plot_volcano(male_deg_data_272(), input$logfc_272, input$adjpval_272, "Volcano Plot Male GSE272")
+  })
+  
+  output$male_counts_272 <- renderText({
+    df <- male_deg_data_272()
+    req(df)
+    paste0("Total Male DEGs: ", nrow(df), 
+           " | Upregulated: ", sum(df$logFC > 0), 
+           " | Downregulated: ", sum(df$logFC < 0))
+  })
+  
+  output$download_male_272 <- downloadHandler(
+    filename = function() paste0("GSE272_Male_DEGs_", Sys.Date(), ".csv"),
+    content = function(file) write.csv(male_deg_data_272(), file, row.names = FALSE)
+  )
+  
+  output$download_volcano_male_272 <- downloadHandler(
+    filename = function() paste0("GSE272_Male_Volcano_", Sys.Date(), ".png"),
+    content = function(file) {
+      png(file, width = 900, height = 700)
+      print(plot_volcano(male_deg_data_272(), input$logfc_272, input$adjpval_272, "Volcano Plot Male GSE272"))
+      dev.off()
+    }
+  )
+  
+  ####### GSE55457 DATA #######
+  gse_55457 <- getGEO("GSE55457", GSEMatrix = TRUE, AnnotGPL = TRUE)
+  gse_data_55457 <- gse_55457[[1]]
+  exprs_data_55457 <- exprs(gse_data_55457)
+  pheno_data_55457 <- pData(gse_data_55457)
+  feature_data_55457 <- fData(gse_data_55457)
+  
+  pheno_data_55457$`clinical status:ch1` <- trimws(pheno_data_55457$`clinical status:ch1`)
+  pheno_data_55457 <- pheno_data_55457[pheno_data_55457$`clinical status:ch1` != "osteoarthritis", ]
+  exprs_data_55457 <- exprs_data_55457[, rownames(pheno_data_55457)]
+  
+  exprs_data_55457 <- exprs_data_55457[complete.cases(exprs_data_55457), ]
+  exprs_data_55457 <- exprs_data_55457[apply(exprs_data_55457, 1, var) > 0.01, ]
+  exprs_data_55457 <- log2(exprs_data_55457 + 1)
+  threshold_55457 <- quantile(rowMeans(exprs_data_55457), 0.25)
+  exprs_data_55457 <- exprs_data_55457[rowMeans(exprs_data_55457) > threshold_55457, ]
+  
+  exprs_annotated_55457 <- data.frame(probe_id = rownames(exprs_data_55457), exprs_data_55457, stringsAsFactors = FALSE)
+  exprs_annotated_55457$gene_symbol <- sapply(strsplit(feature_data_55457[rownames(exprs_data_55457), "Gene symbol"], "///", fixed = TRUE), `[`, 1)
+  
+  output$exprs_table_55457 <- renderDT({ datatable(head(exprs_annotated_55457, 20), options = list(scrollX = TRUE)) })
+  output$pheno_table_55457 <- renderDT({ datatable(head(pheno_data_55457, 20), options = list(scrollX = TRUE)) })
+  
+  plot_volcano <- function(deg_df, logfc_cut, adjp_cut, title_text) {
+    deg_df <- deg_df[!is.na(deg_df$logFC) & !is.na(deg_df$adj.P.Val) & !is.na(deg_df$gene_symbol), ]
+    deg_df <- deg_df[(deg_df$logFC > logfc_cut & deg_df$adj.P.Val < adjp_cut) | (deg_df$logFC < -logfc_cut & deg_df$adj.P.Val < adjp_cut), ]
+    deg_df$Significance <- ifelse(deg_df$logFC > 0, "Upregulated", "Downregulated")
+    deg_df$Significance <- factor(deg_df$Significance, levels = c("Upregulated", "Downregulated"))
+    
+    up_top5 <- head(deg_df[deg_df$Significance == "Upregulated", ][order(-deg_df$logFC), ], 5)
+    down_top5 <- head(deg_df[deg_df$Significance == "Downregulated", ][order(deg_df$logFC), ], 5)
+    top_labels <- rbind(up_top5, down_top5)
+    top_labels <- top_labels[!is.na(top_labels$gene_symbol), ]
+    
+    up_count <- sum(deg_df$Significance == "Upregulated")
+    down_count <- sum(deg_df$Significance == "Downregulated")
+    
+    ggplot(deg_df, aes(x = logFC, y = -log10(adj.P.Val), color = Significance)) +
+      geom_point(alpha = 0.6) +
+      geom_vline(xintercept = c(-logfc_cut, logfc_cut), linetype = "dashed", color = "black") +
+      geom_hline(yintercept = -log10(adjp_cut), linetype = "dashed", color = "black") +
+      geom_text(data = top_labels, aes(label = gene_symbol), vjust = -1, size = 4, show.legend = FALSE) +
+      scale_color_manual(values = c("Upregulated" = "red", "Downregulated" = "blue")) +
+      theme_minimal() +
+      labs(
+        x = "log2 Fold Change", 
+        y = "-log10 Adjusted P-value",
+        title = paste0(title_text, " - Upregulated: ", up_count, " | Downregulated: ", down_count),
+        color = "Legend"
+      ) +
+      theme(plot.title = element_text(hjust = 0.5))
+  }
+  
+  filtered_female <- eventReactive(input$analyze_55457, {
+    exprs_only <- exprs_annotated_55457[, !(colnames(exprs_annotated_55457) %in% c("probe_id", "gene_symbol"))]
+    female_samples <- pheno_data_55457$`gender:ch1` == "female"
+    pheno_female <- pheno_data_55457[female_samples, ]
+    group_female <- factor(pheno_female$`clinical status:ch1`)
+    design_female <- model.matrix(~ 0 + group_female)
+    colnames(design_female) <- make.names(colnames(design_female))
+    contrast_female <- makeContrasts(RA_vs_Control = group_femalerheumatoid.arthritis - group_femalenormal.control, levels = design_female)
+    fit_female <- lmFit(exprs_only[, female_samples], design_female)
+    fit2_female <- contrasts.fit(fit_female, contrast_female)
+    fit2_female <- eBayes(fit2_female)
+    res_female <- topTable(fit2_female, number = Inf, adjust.method = "fdr")
+    res_female$probe_id <- rownames(res_female)
+    res_female$gene_symbol <- exprs_annotated_55457[res_female$probe_id, "gene_symbol"]
+    res_female[res_female$adj.P.Val < input$adjpval_55457 & abs(res_female$logFC) > input$logfc_55457, ]
+  })
+  
+  filtered_male <- eventReactive(input$analyze_55457, {
+    exprs_only <- exprs_annotated_55457[, !(colnames(exprs_annotated_55457) %in% c("probe_id", "gene_symbol"))]
+    male_samples <- pheno_data_55457$`gender:ch1` == "male"
+    pheno_male <- pheno_data_55457[male_samples, ]
+    group_male <- factor(pheno_male$`clinical status:ch1`)
+    design_male <- model.matrix(~ 0 + group_male)
+    colnames(design_male) <- make.names(colnames(design_male))
+    contrast_male <- makeContrasts(RA_vs_Control = group_malerheumatoid.arthritis - group_malenormal.control, levels = design_male)
+    fit_male <- lmFit(exprs_only[, male_samples], design_male)
+    fit2_male <- contrasts.fit(fit_male, contrast_male)
+    fit2_male <- eBayes(fit2_male)
+    res_male <- topTable(fit2_male, number = Inf, adjust.method = "fdr")
+    res_male$probe_id <- rownames(res_male)
+    res_male$gene_symbol <- exprs_annotated_55457[res_male$probe_id, "gene_symbol"]
+    res_male[res_male$adj.P.Val < input$adjpval_55457 & abs(res_male$logFC) > input$logfc_55457, ]
+  })
+  
+  output$female_de_55457 <- renderDT({
+    req(filtered_female())
+    datatable(filtered_female(), options = list(scrollX = TRUE))
+  })
+  
+  output$volcano_female_55457 <- renderPlot({
+    req(filtered_female())
+    plot_volcano(filtered_female(), input$logfc_55457, input$adjpval_55457, "Volcano Plot Female(without NA)")
+  })
+  
+  output$female_counts <- renderText({
+    df <- filtered_female()
+    req(df)
+    paste0("Total Female DEGs: ", nrow(df), 
+           " | Upregulated: ", sum(df$logFC > 0), 
+           " | Downregulated: ", sum(df$logFC < 0))
+  })
+  
+  output$male_de_55457 <- renderDT({
+    req(filtered_male())
+    datatable(filtered_male(), options = list(scrollX = TRUE))
+  })
+  
+  output$volcano_male_55457 <- renderPlot({
+    req(filtered_male())
+    plot_volcano(filtered_male(), input$logfc_55457, input$adjpval_55457, "Volcano Plot Male(without NA)")
+  })
+  
+  output$male_counts <- renderText({
+    df <- filtered_male()
+    req(df)
+    paste0("Total Male DEGs: ", nrow(df), 
+           " | Upregulated: ", sum(df$logFC > 0), 
+           " | Downregulated: ", sum(df$logFC < 0))
+  })
+  
+  output$download_female_55457 <- downloadHandler(
+    filename = function() paste0("GSE55457_Female_DEGs_", Sys.Date(), ".csv"),
+    content = function(file) write.csv(filtered_female(), file, row.names = FALSE)
+  )
+  
+  output$download_male_55457 <- downloadHandler(
+    filename = function() paste0("GSE55457_Male_DEGs_", Sys.Date(), ".csv"),
+    content = function(file) write.csv(filtered_male(), file, row.names = FALSE)
+  )
+  
+  output$download_volcano_female_55457 <- downloadHandler(
+    filename = function() paste0("Volcano_Female_GSE55457_", Sys.Date(), ".png"),
+    content = function(file) {
+      png(file, width = 1000, height = 600)
+      print(plot_volcano(filtered_female(), input$logfc_55457, input$adjpval_55457, "Volcano Plot Female(without NA)"))
+      dev.off()
+    }
+  )
+  
+  output$download_volcano_male_55457 <- downloadHandler(
+    filename = function() paste0("Volcano_Male_GSE55457_", Sys.Date(), ".png"),
+    content = function(file) {
+      png(file, width = 1000, height = 600)
+      print(plot_volcano(filtered_male(), input$logfc_55457, input$adjpval_55457, "Volcano Plot Male(without NA)"))
+      dev.off()
+    }
+  )
+    
+  gse_65010 <- getGEO("GSE65010", GSEMatrix = TRUE, AnnotGPL = TRUE)
+  gse_data_65010 <- gse_65010[[1]]
+  
+  exprs_data_65010 <- exprs(gse_data_65010)
+  pheno_data_65010 <- pData(gse_data_65010)
+  feature_data_65010 <- fData(gse_data_65010)
+  
+  # Gender vector (adjust length & order to your sample metadata!)
+  gender_data1 <- c(
+    "Female", "Female", "Female", "Female", "Female", "Female", "Female", "Female",
+    "Female", "Female", "Female", "Female", "Female", "Female", "Female", "Female",
+    "Male", "Male", "Male", "Male", "Male", "Male", "Male", "Male",
+    "Female", "Female", "Female", "Female", "Female", "Female", "Female", "Female",
+    "Female", "Female", "Female", "Female", "Female", "Female", "Female", "Female",
+    "Male", "Male", "Male", "Male", "Male", "Male", "Male", "Male"
+  )
+  
+  if(length(gender_data1) != nrow(pheno_data_65010)) {
+    stop("Length of gender_data1 does not match number of samples!")
+  }
+  pheno_data_65010$Gender <- gender_data1
+  
+  # Create Disease_state from characteristics_ch1.2 column
+  pheno_data_65010$Disease_state <- sapply(pheno_data_65010$characteristics_ch1.2, function(x) {
+    if (grepl("healthy control", x, ignore.case = TRUE)) "Control" else "RA"
+  })
+  
+  # Preprocess expression data
+  exprs_data_65010 <- exprs_data_65010[complete.cases(exprs_data_65010), ]
+  exprs_data_65010 <- exprs_data_65010[apply(exprs_data_65010, 1, var) > 0.01, ]
+  exprs_data_65010 <- log2(exprs_data_65010 + 1)
+  
+  threshold_65010 <- quantile(rowMeans(exprs_data_65010), 0.25)
+  exprs_data_65010 <- exprs_data_65010[rowMeans(exprs_data_65010) > threshold_65010, ]
+  
+  common_probes <- intersect(rownames(exprs_data_65010), rownames(feature_data_65010))
+  exprs_data_65010 <- exprs_data_65010[common_probes, , drop = FALSE]
+  feature_data_65010 <- feature_data_65010[common_probes, , drop = FALSE]
+  
+  gene_symbol_raw <- as.character(feature_data_65010$`Gene symbol`)
+  gene_symbol_raw[is.na(gene_symbol_raw)] <- ""
+  gene_symbols <- sapply(strsplit(gene_symbol_raw, " /// ", fixed = TRUE), `[`, 1)
+  
+  exprs_annotated_65010 <- data.frame(
+    probe_id = rownames(exprs_data_65010),
+    exprs_data_65010,
+    gene_symbol = gene_symbols,
+    stringsAsFactors = FALSE
+  )
+  
+  # Show expression and phenotype tables
+  output$exprs_table_010 <- renderDT({
+    datatable(head(exprs_annotated_65010, 20), options = list(scrollX = TRUE))
+  })
+  
+  output$pheno_table_010 <- renderDT({
+    datatable(pheno_data_65010[, c("Gender", "Disease_state")], options = list(scrollX = TRUE))
+  })
+  
+  # Volcano plot helper function
+  plot_volcano <- function(deg_df, logfc_cut, adjp_cut, title_text) {
+    # Remove missing or empty gene symbols and missing values in key columns
+    deg_df <- deg_df[!is.na(deg_df$logFC) & !is.na(deg_df$adj.P.Val) & deg_df$gene_symbol != "", ]
+    
+    # Filter by thresholds
+    deg_df <- deg_df[(deg_df$logFC > logfc_cut & deg_df$adj.P.Val < adjp_cut) | 
+                       (deg_df$logFC < -logfc_cut & deg_df$adj.P.Val < adjp_cut), ]
+    
+    # Assign significance and remove any NA if present
+    deg_df$Significance <- ifelse(deg_df$logFC > 0, "Upregulated", "Downregulated")
+    deg_df <- deg_df[!is.na(deg_df$Significance), ]
+    deg_df$Significance <- factor(deg_df$Significance, levels = c("Upregulated", "Downregulated"))
+    
+    # Counts of genes
+    up_count <- sum(deg_df$Significance == "Upregulated", na.rm = TRUE)
+    down_count <- sum(deg_df$Significance == "Downregulated", na.rm = TRUE)
+    
+    # Get top genes for labels
+    up_top5 <- head(deg_df[deg_df$Significance == "Upregulated", ][order(-deg_df$logFC), ], 5)
+    down_top5 <- head(deg_df[deg_df$Significance == "Downregulated", ][order(deg_df$logFC), ], 5)
+    top_labels <- rbind(up_top5, down_top5)
+    top_labels <- top_labels[!is.na(top_labels$gene_symbol), ]
+    
+    # Plot
+    ggplot(deg_df, aes(x = logFC, y = -log10(adj.P.Val), color = Significance)) +
+      geom_point(alpha = 0.6) +
+      geom_vline(xintercept = c(-logfc_cut, logfc_cut), linetype = "dashed", color = "black") +
+      geom_hline(yintercept = -log10(adjp_cut), linetype = "dashed", color = "black") +
+      geom_text(data = top_labels, aes(label = gene_symbol), vjust = -1, size = 4, show.legend = FALSE) +
+      scale_color_manual(values = c("Upregulated" = "red", "Downregulated" = "blue")) +
+      theme_minimal() +
+      labs(
+        x = "log2 Fold Change", 
+        y = "-log10 Adjusted P-value",
+        title = paste0(title_text, " - Upregulated: ", up_count, " | Downregulated: ", down_count),
+        color = "Legend"
+      ) +
+      theme(plot.title = element_text(hjust = 0.5))
+  }
+  
+  
+  # DEG reactive for Female
+  filtered_female_010 <- eventReactive(input$analyze_010, {
+    exprs_only <- exprs_annotated_65010[, !(colnames(exprs_annotated_65010) %in% c("probe_id", "gene_symbol"))]
+    
+    female_samples <- pheno_data_65010$Gender == "Female"
+    group_female <- factor(pheno_data_65010$Disease_state[female_samples])
+    design_female <- model.matrix(~ 0 + group_female)
+    colnames(design_female) <- make.names(colnames(design_female))
+    
+    contrast_female <- makeContrasts(RA_vs_Control = group_femaleRA - group_femaleControl, levels = design_female)
+    
+    fit_female <- lmFit(exprs_only[, female_samples], design_female)
+    fit2_female <- contrasts.fit(fit_female, contrast_female)
+    fit2_female <- eBayes(fit2_female)
+    
+    res_female <- topTable(fit2_female, number = Inf, adjust.method = "fdr")
+    res_female$probe_id <- rownames(res_female)
+    res_female$gene_symbol <- exprs_annotated_65010$gene_symbol[match(res_female$probe_id, exprs_annotated_65010$probe_id)]
+    
+    dplyr::filter(res_female, adj.P.Val < input$adjpval_010 & abs(logFC) > input$logfc_010)
+  })
+  
+  # DEG reactive for Male
+  filtered_male_010 <- eventReactive(input$analyze_010, {
+    exprs_only <- exprs_annotated_65010[, !(colnames(exprs_annotated_65010) %in% c("probe_id", "gene_symbol"))]
+    
+    male_samples <- pheno_data_65010$Gender == "Male"
+    group_male <- factor(pheno_data_65010$Disease_state[male_samples])
+    design_male <- model.matrix(~ 0 + group_male)
+    colnames(design_male) <- make.names(colnames(design_male))
+    
+    contrast_male <- makeContrasts(RA_vs_Control = group_maleRA - group_maleControl, levels = design_male)
+    
+    fit_male <- lmFit(exprs_only[, male_samples], design_male)
+    fit2_male <- contrasts.fit(fit_male, contrast_male)
+    fit2_male <- eBayes(fit2_male)
+    
+    res_male <- topTable(fit2_male, number = Inf, adjust.method = "fdr")
+    res_male$probe_id <- rownames(res_male)
+    res_male$gene_symbol <- exprs_annotated_65010$gene_symbol[match(res_male$probe_id, exprs_annotated_65010$probe_id)]
+    
+    dplyr::filter(res_male, adj.P.Val < input$adjpval_010 & abs(logFC) > input$logfc_010)
+  })
+  
+  # Render DEG tables
+  output$female_de_010 <- renderDT({
+    req(filtered_female_010())
+    datatable(filtered_female_010(), options = list(scrollX = TRUE))
+  })
+  
+  output$male_de_010 <- renderDT({
+    req(filtered_male_010())
+    datatable(filtered_male_010(), options = list(scrollX = TRUE))
+  })
+  
+  # Render volcano plots
+  output$volcano_female_010 <- renderPlot({
+    req(filtered_female_010())
+    plot_volcano(filtered_female_010(), input$logfc_010, input$adjpval_010, "Volcano Plot Female (GSE010)")
+  })
+  
+  output$volcano_male_010 <- renderPlot({
+    req(filtered_male_010())
+    plot_volcano(filtered_male_010(), input$logfc_010, input$adjpval_010, "Volcano Plot Male (GSE010)")
+  })
+  
+  # DEG counts text
+  output$female_counts_010 <- renderText({
+    df <- filtered_female_010()
+    req(df)
+    paste0("Total Female DEGs: ", nrow(df), 
+           " | Upregulated: ", sum(df$logFC > 0), 
+           " | Downregulated: ", sum(df$logFC < 0))
+  })
+  
+  output$male_counts_010 <- renderText({
+    df <- filtered_male_010()
+    req(df)
+    paste0("Total Male DEGs: ", nrow(df), 
+           " | Upregulated: ", sum(df$logFC > 0), 
+           " | Downregulated: ", sum(df$logFC < 0))
+  })
+  
+  # Download handlers for DEG tables
+  output$download_female_010 <- downloadHandler(
+    filename = function() paste0("GSE65010_Female_DEGs_", Sys.Date(), ".csv"),
+    content = function(file) {
+      write.csv(filtered_female_010(), file, row.names = FALSE)
+    }
+  )
+  
+  output$download_male_010 <- downloadHandler(
+    filename = function() paste0("GSE65010_Male_DEGs_", Sys.Date(), ".csv"),
+    content = function(file) {
+      write.csv(filtered_male_010(), file, row.names = FALSE)
+    }
+  )
+  
+  # Download handlers for volcano plots as PNG
+  output$download_volcano_female_010 <- downloadHandler(
+    filename = function() paste0("Volcano_Female_GSE65010_", Sys.Date(), ".png"),
+    content = function(file) {
+      png(file, width = 1000, height = 600)
+      print(plot_volcano(filtered_female_010(), input$logfc_010, input$adjpval_010, "Volcano Plot Female (GSE010)"))
+      dev.off()
+    }
+  )
+  
+  output$download_volcano_male_010 <- downloadHandler(
+    filename = function() paste0("Volcano_Male_GSE65010_", Sys.Date(), ".png"),
+    content = function(file) {
+      png(file, width = 1000, height = 600)
+      print(plot_volcano(filtered_male_010(), input$logfc_010, input$adjpval_010, "Volcano Plot Male (GSE010)"))
+      dev.off()
+    }
+  )
+  
+  
+  gse12021 <- getGEO("GSE12021", GSEMatrix = TRUE)[[1]]
+  phen12021 <- pData(gse12021)
+  feat12021 <- fData(gse12021)
+  exp12021 <- exprs(gse12021)
+  
+  exp12021 <- as.data.frame(log2(exp12021 + 1))
+  exp12021 <- cbind(ID = rownames(exp12021), exp12021)
+  exp12021 <- merge(feat12021[, c(1, 2, 11)], exp12021, by = "ID")
+  names(exp12021)[names(exp12021) == "Gene Symbol"] <- "Gene_Symbol"
+  exp12021$Gene_Symbol <- sapply(strsplit(as.character(exp12021$Gene_Symbol), " /// "), `[`, 1)
+  exp12021 <- exp12021[!is.na(exp12021$Gene_Symbol) & exp12021$Gene_Symbol != "", ]
+  exp12021 <- exp12021[!duplicated(exp12021$Gene_Symbol), ]
+  rownames(exp12021) <- exp12021$Gene_Symbol
+  exp12021 <- exp12021[, !(names(exp12021) %in% c("ID", "Gene Title", "Gene_Symbol"))]
+  
+  for (x in 1:nrow(phen12021)) {
+    status <- phen12021$`characteristics_ch1.2`[x]
+    if (status == "normal control") {
+      phen12021$`characteristics_ch1.2`[x] <- "Control"
+    } else if (status == "disease: osteoarthritis") {
+      phen12021$`characteristics_ch1.2`[x] <- "OA"
+    } else {
+      phen12021$`characteristics_ch1.2`[x] <- "RA"
+    }
+    
+    sex <- phen12021$`characteristics_ch1`[x]
+    phen12021$`characteristics_ch1`[x] <- ifelse(sex == "sex: m", "Male", "Female")
+  }
+  phen12021 <- phen12021[phen12021$`characteristics_ch1.2` != "OA", ]
+  
+  # Render Expression and Phenotype tables
+  output$exprs_table_12021 <- renderDT({
+    datatable(exp12021, options = list(scrollX = TRUE))
+  })
+  
+  output$pheno_table_12021 <- renderDT({
+    datatable(phen12021, options = list(scrollX = TRUE))
+  })
+  
+  # Reactive storage for DEG data
+  female_deg_data_12021 <- reactiveVal(NULL)
+  male_deg_data_12021 <- reactiveVal(NULL)
+  
+  observeEvent(input$analyze_12021, {
+    
+    # Male subset
+    male_samples <- phen12021$`characteristics_ch1` == "Male"
+    pheno_male <- phen12021[male_samples, ]
+    exprs_male <- exp12021[, pheno_male$geo_accession, drop = FALSE]
+    
+    group_male <- factor(pheno_male$`characteristics_ch1.2`)
+    design_male <- model.matrix(~ 0 + group_male)
+    colnames(design_male) <- make.names(colnames(design_male))
+    contrast_male <- makeContrasts(RA_vs_Control = group_maleRA - group_maleControl, levels = design_male)
+    
+    fit_male <- lmFit(exprs_male, design_male)
+    fit_male <- contrasts.fit(fit_male, contrast_male)
+    fit_male <- eBayes(fit_male)
+    
+    res_male <- topTable(fit_male, number = Inf, adjust.method = "fdr")
+    res_male$gene_symbol <- rownames(res_male)
+    filtered_male <- res_male[res_male$adj.P.Val < input$adjpval_12021 & abs(res_male$logFC) > input$logfc_12021, ]
+    male_deg_data_12021(filtered_male)
+    
+    output$male_de_12021 <- renderDT({
+      datatable(filtered_male, options = list(scrollX = TRUE))
+    })
+    
+    # Female subset
+    female_samples <- phen12021$`characteristics_ch1` == "Female"
+    pheno_female <- phen12021[female_samples, ]
+    exprs_female <- exp12021[, pheno_female$geo_accession, drop = FALSE]
+    
+    group_female <- factor(pheno_female$`characteristics_ch1.2`)
+    design_female <- model.matrix(~ 0 + group_female)
+    colnames(design_female) <- make.names(colnames(design_female))
+    contrast_female <- makeContrasts(RA_vs_Control = group_femaleRA - group_femaleControl, levels = design_female)
+    
+    fit_female <- lmFit(exprs_female, design_female)
+    fit_female <- contrasts.fit(fit_female, contrast_female)
+    fit_female <- eBayes(fit_female)
+    
+    res_female <- topTable(fit_female, number = Inf, adjust.method = "fdr")
+    res_female$gene_symbol <- rownames(res_female)
+    filtered_female <- res_female[res_female$adj.P.Val < input$adjpval_12021 & abs(res_female$logFC) > input$logfc_12021, ]
+    female_deg_data_12021(filtered_female)
+    
+    output$female_de_12021 <- renderDT({
+      datatable(filtered_female, options = list(scrollX = TRUE))
+    })
+  })
+  
+  # Download handlers for DEGs
+  output$download_female_12021 <- downloadHandler(
+    filename = function() paste0("GSE12021_Female_DEGs_", Sys.Date(), ".csv"),
+    content = function(file) write.csv(female_deg_data_12021(), file, row.names = FALSE)
+  )
+  
+  output$download_male_12021 <- downloadHandler(
+    filename = function() paste0("GSE12021_Male_DEGs_", Sys.Date(), ".csv"),
+    content = function(file) write.csv(male_deg_data_12021(), file, row.names = FALSE)
+  )
+  
+  # Volcano plots render
+  # Volcano plots render
+  output$volcano_female_12021 <- renderPlot({
+    req(female_deg_data_12021())
+    plot_volcano(female_deg_data_12021(), input$logfc_12021, input$adjpval_12021, "Volcano Plot Female (GSE12021)")
+  })
+  
+  
+  
+  
+  
+  output$volcano_male_12021 <- renderPlot({
+    req(male_deg_data_12021())
+    plot_volcano(male_deg_data_12021(), input$logfc_12021, input$adjpval_12021, "Volcano Plot Male (GSE12021)")
+  })
+  
+  # Counts text output
+  output$female_counts_12021 <- renderText({
+    df <- female_deg_data_12021()
+    req(df)
+    paste0("Total Female DEGs: ", nrow(df),
+           " | Upregulated: ", sum(df$logFC > 0),
+           " | Downregulated: ", sum(df$logFC < 0))
+  })
+  
+  output$male_counts_12021 <- renderText({
+    df <- male_deg_data_12021()
+    req(df)
+    paste0("Total Male DEGs: ", nrow(df),
+           " | Upregulated: ", sum(df$logFC > 0),
+           " | Downregulated: ", sum(df$logFC < 0))
+  })
+  
+  # Volcano plots download handlers
+  output$download_volcano_female_12021 <- downloadHandler(
+    filename = function() paste0("Volcano_Female_GSE12021_", Sys.Date(), ".png"),
+    content = function(file) {
+      png(file, width = 1000, height = 600)
+      print(plot_volcano_12021(female_deg_data_12021(), input$logfc_12021, input$adjpval_12021, "Volcano Plot Female (GSE12021)"))
+      dev.off()
+    }
+  )
+  
+  output$download_volcano_male_12021 <- downloadHandler(
+    filename = function() paste0("Volcano_Male_GSE12021_", Sys.Date(), ".png"),
+    content = function(file) {
+      png(file, width = 1000, height = 600)
+      print(plot_volcano_12021(male_deg_data_12021(), input$logfc_12021, input$adjpval_12021, "Volcano Plot Male (GSE12021)"))
+      dev.off()
+    }
+  )
+  
+  
+    
+}
+
+
+shinyApp(ui, server)
