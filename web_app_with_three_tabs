@@ -1,0 +1,441 @@
+library(shiny)
+library(limma)
+library(ggplot2)
+library(DT)
+library(dplyr)
+library(randomForest)
+library(caret)
+library(Boruta)
+library(pROC)
+library(PRROC)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(glmnet)
+library(tidyr)  # for pivot_longer
+
+options(shiny.maxRequestSize = 100*1024^2)
+
+ui <- fluidPage(
+  titlePanel("ArthOMix (GPL570/GPL90 Compatible)"),
+  uiOutput("main_ui")
+)
+
+server <- function(input, output, session) {
+  
+  # Expression data load and preprocess
+  expr_data <- reactive({
+    req(input$expr_file)
+    df <- read.csv(input$expr_file$datapath, check.names = FALSE, stringsAsFactors = FALSE)
+    gene_symbols <- df[[1]]
+    expr_df <- df[, -1, drop = FALSE]
+    colnames(expr_df) <- gsub("[ .]", "", colnames(expr_df))
+    colnames(expr_df) <- trimws(colnames(expr_df))
+    expr_df <- data.frame(lapply(expr_df, function(x) suppressWarnings(as.numeric(as.character(x)))), 
+                          check.names = FALSE, stringsAsFactors = FALSE)
+    rownames(expr_df) <- gene_symbols
+    expr_df <- expr_df[apply(expr_df, 1, var, na.rm = TRUE) > 0.01, ] # filter low variance genes
+    log2(expr_df + 1)
+  })
+  
+  # Phenotype data load and preprocess
+  pheno_data <- reactive({
+    req(input$pheno_file)
+    df <- read.csv(input$pheno_file$datapath, check.names = FALSE, stringsAsFactors = FALSE)
+    colnames(df) <- tolower(colnames(df))
+    sample_col <- grep("^sample$", colnames(df), value = TRUE)
+    gender_col <- grep("gender|sex", colnames(df), value = TRUE)[1]
+    status_col <- grep("status|group|diagnosis|condition|disease", colnames(df), value = TRUE)[1]
+    if (is.null(gender_col) || is.null(status_col)) stop("Missing gender or status column.")
+    if (length(sample_col) == 1) {
+      samples_clean <- gsub("[ .]", "", df[[sample_col]])
+      samples_clean <- trimws(samples_clean)
+      rownames(df) <- samples_clean
+    }
+    df$gender <- tolower(trimws(df[[gender_col]]))
+    df$status <- tolower(trimws(df[[status_col]]))
+    df$status <- recode(df$status,
+                        "ra" = "rheumatoid arthritis",
+                        "normal" = "control",
+                        "healthy" = "control")
+    df
+  })
+  
+  # Expression with annotation and matching samples
+  exprs_annotated <- reactive({
+    exprs <- expr_data()
+    pheno <- pheno_data()
+    common_samples <- intersect(colnames(exprs), rownames(pheno))
+    if(length(common_samples) == 0) stop("No matching samples between expression and phenotype data.")
+    exprs_sub <- exprs[, common_samples, drop = FALSE]
+    pheno_sub <- pheno[common_samples, , drop = FALSE]
+    exprs_sub <- exprs_sub[, order(colnames(exprs_sub))]
+    pheno_sub <- pheno_sub[order(rownames(pheno_sub)), , drop = FALSE]
+    data.frame(gene_symbol = rownames(exprs_sub), exprs_sub, stringsAsFactors = FALSE)
+  })
+  
+  # DEG Analysis function by gender
+  run_deg <- function(gender_type) {
+    exprs <- exprs_annotated()
+    pheno <- pheno_data()
+    samples <- which(pheno$gender == gender_type)
+    if(length(samples) < 2) return(NULL)
+    pheno_sub <- pheno[samples, ]
+    expr_sub <- exprs[, colnames(exprs) %in% rownames(pheno_sub), drop = FALSE]
+    expr_only <- expr_sub[, !(colnames(expr_sub) %in% "gene_symbol"), drop = FALSE]
+    group <- factor(pheno_sub$status)
+    design <- model.matrix(~ 0 + group)
+    colnames(design) <- make.names(colnames(design))
+    if (!all(c("grouprheumatoid.arthritis", "groupcontrol") %in% colnames(design))) return(NULL)
+    contrast <- makeContrasts(RA_vs_Control = grouprheumatoid.arthritis - groupcontrol, levels = design)
+    fit <- lmFit(expr_only, design)
+    fit2 <- contrasts.fit(fit, contrast)
+    fit2 <- eBayes(fit2)
+    res <- topTable(fit2, number = Inf, adjust.method = "fdr")
+    res$gene_symbol <- rownames(res)
+    filtered <- res[res$adj.P.Val < input$adjpval & abs(res$logFC) > input$logfc, ]
+    filtered
+  }
+  
+  filtered_female <- eventReactive(input$analyze, run_deg("female"))
+  filtered_male <- eventReactive(input$analyze, run_deg("male"))
+  
+  plot_volcano <- function(deg_df, title_text) {
+    req(deg_df)
+    deg_df$Significance <- ifelse(deg_df$logFC > 0, "Upregulated", "Downregulated")
+    top_genes <- rbind(
+      head(deg_df[deg_df$Significance == "Upregulated", ][order(-deg_df$logFC), ], 5),
+      head(deg_df[deg_df$Significance == "Downregulated", ][order(deg_df$logFC), ], 5)
+    )
+    ggplot(deg_df, aes(x = logFC, y = -log10(adj.P.Val), color = Significance)) +
+      geom_point(alpha = 0.6) +
+      geom_text(data = top_genes, aes(label = gene_symbol), vjust = -1, size = 3, show.legend = FALSE) +
+      scale_color_manual(values = c("Upregulated" = "red", "Downregulated" = "blue")) +
+      geom_hline(yintercept = -log10(input$adjpval), linetype = "dashed") +
+      geom_vline(xintercept = c(-input$logfc, input$logfc), linetype = "dashed") +
+      theme_minimal() +
+      labs(title = title_text, x = "log2 Fold Change", y = "-log10 Adj P-value") +
+      theme(plot.title = element_text(hjust = 0.5))
+  }
+  
+  output$exprs_table <- renderDT({
+    req(exprs_annotated())
+    datatable(head(exprs_annotated(), 20), options = list(scrollX = TRUE))
+  })
+  
+  output$pheno_table <- renderDT({
+    req(pheno_data())
+    datatable(head(pheno_data(), 20), options = list(scrollX = TRUE))
+  })
+  
+  output$female_degs <- renderDT({
+    req(filtered_female())
+    datatable(filtered_female(), options = list(scrollX = TRUE))
+  })
+  
+  output$volcano_female <- renderPlot({
+    req(filtered_female())
+    plot_volcano(filtered_female(), "Volcano Plot - Female")
+  })
+  
+  output$female_counts <- renderText({
+    df <- filtered_female()
+    req(df)
+    paste0("Total Female DEGs: ", nrow(df),
+           " | Upregulated: ", sum(df$logFC > 0),
+           " | Downregulated: ", sum(df$logFC < 0))
+  })
+  
+  output$download_volcano_female <- downloadHandler(
+    filename = function() paste0("VolcanoPlot_Female_", Sys.Date(), ".png"),
+    content = function(file) {
+      ggsave(file, plot = plot_volcano(filtered_female(), "Volcano Plot - Female"), width = 8, height = 6)
+    }
+  )
+  
+  output$download_female <- downloadHandler(
+    filename = function() paste0("Female_DEGs_", Sys.Date(), ".csv"),
+    content = function(file) write.csv(filtered_female(), file, row.names = FALSE)
+  )
+  
+  output$male_degs <- renderDT({
+    req(filtered_male())
+    datatable(filtered_male(), options = list(scrollX = TRUE))
+  })
+  
+  output$volcano_male <- renderPlot({
+    req(filtered_male())
+    plot_volcano(filtered_male(), "Volcano Plot - Male")
+  })
+  
+  output$male_counts <- renderText({
+    df <- filtered_male()
+    req(df)
+    paste0("Total Male DEGs: ", nrow(df),
+           " | Upregulated: ", sum(df$logFC > 0),
+           " | Downregulated: ", sum(df$logFC < 0))
+  })
+  
+  output$download_volcano_male <- downloadHandler(
+    filename = function() paste0("VolcanoPlot_Male_", Sys.Date(), ".png"),
+    content = function(file) {
+      ggsave(file, plot = plot_volcano(filtered_male(), "Volcano Plot - Male"), width = 8, height = 6)
+    }
+  )
+  
+  output$download_male <- downloadHandler(
+    filename = function() paste0("Male_DEGs_", Sys.Date(), ".csv"),
+    content = function(file) write.csv(filtered_male(), file, row.names = FALSE)
+  )
+  
+  output$summary_table <- renderDT({
+    req(filtered_female())
+    req(filtered_male())
+    female <- filtered_female()
+    male <- filtered_male()
+    summary_df <- data.frame(
+      Metric = c("log2FC threshold", "Adjusted P-value threshold",
+                 "Female DEGs (total)", "Female Upregulated", "Female Downregulated",
+                 "Male DEGs (total)", "Male Upregulated", "Male Downregulated"),
+      Value = c(input$logfc, input$adjpval,
+                nrow(female), sum(female$logFC > 0), sum(female$logFC < 0),
+                nrow(male), sum(male$logFC > 0), sum(male$logFC < 0))
+    )
+    datatable(summary_df, options = list(dom = 't'))
+  })
+  
+  # Helper to get ML data subset for given gender and DEGs-only toggle
+  ml_data <- function(gender_type, degs_only) {
+    pheno <- pheno_data()
+    exprs <- exprs_annotated()
+    samples_gender <- rownames(pheno)[pheno$gender == gender_type]
+    common_samples <- intersect(colnames(exprs)[-1], samples_gender)
+    if(length(common_samples) < 10) return(NULL)
+    pheno_sub <- pheno[common_samples, ]
+    
+    if (degs_only) {
+      degs <- if(gender_type == "female") filtered_female() else filtered_male()
+      req(degs)
+      genes <- degs$gene_symbol
+      expr_sub <- exprs[exprs$gene_symbol %in% genes, c("gene_symbol", common_samples), drop = FALSE]
+    } else {
+      expr_sub <- exprs[, c("gene_symbol", common_samples), drop = FALSE]
+    }
+    
+    expr_matrix <- t(expr_sub[,-1])
+    colnames(expr_matrix) <- expr_sub$gene_symbol
+    expr_matrix <- as.data.frame(expr_matrix)
+    expr_matrix$status <- pheno_sub$status
+    expr_matrix$status <- factor(expr_matrix$status, levels = c("control", "rheumatoid arthritis"))
+    
+    expr_matrix
+  }
+  
+  ### BorutaSHAP
+  boruta_res <- eventReactive(input$run_boruta, {
+    req(input$boruta_gender)
+    data <- ml_data(input$boruta_gender, input$boruta_degs_only)
+    if (is.null(data)) return(NULL)
+    set.seed(123)
+    boruta_out <- Boruta(status ~ ., data = data, doTrace = 0, maxRuns = 100)
+    selected <- getSelectedAttributes(boruta_out, withTentative = FALSE)
+    importance_df <- attStats(boruta_out)
+    # Filter importance only for selected features
+    importance_selected <- importance_df[rownames(importance_df) %in% selected, , drop = FALSE]
+    list(boruta_out = boruta_out, selected = selected, importance_selected = importance_selected)
+  })
+  
+  output$boruta_params <- renderPrint({
+    res <- boruta_res()
+    req(res)
+    print(res$boruta_out)
+  })
+  
+  output$boruta_genes <- renderDT({
+    res <- boruta_res()
+    req(res)
+    datatable(data.frame(SelectedFeatures = res$selected), options = list(pageLength = 10))
+  })
+  
+  # Boruta importance scores only for selected features
+  output$boruta_importance <- renderDT({
+    res <- boruta_res()
+    req(res)
+    datatable(res$importance_selected, options = list(scrollX = TRUE))
+  })
+  
+  # Boxplot of expression for top Boruta genes by gender
+  output$boruta_boxplot <- renderPlot({
+    res <- boruta_res()
+    req(res)
+    top_genes <- res$selected[1:min(5, length(res$selected))]
+    exprs <- exprs_annotated()
+    pheno <- pheno_data()
+    req(nrow(exprs) > 0, nrow(pheno) > 0)
+    
+    # Prepare data for boxplot
+    exprs_sub <- exprs[exprs$gene_symbol %in% top_genes, ]
+    expr_long <- tidyr::pivot_longer(exprs_sub, -gene_symbol, names_to = "sample", values_to = "expression")
+    expr_long$sample <- as.character(expr_long$sample)
+    expr_long$gene_symbol <- factor(expr_long$gene_symbol, levels = top_genes)
+    expr_long <- merge(expr_long, pheno[, c("gender")], by.x = "sample", by.y = "row.names")
+    expr_long$gender <- factor(expr_long$gender, levels = c("female", "male"))
+    
+    ggplot(expr_long, aes(x = gender, y = expression, fill = gender)) +
+      geom_boxplot() +
+      facet_wrap(~ gene_symbol, scales = "free_y") +
+      theme_minimal() +
+      labs(title = "Expression of Top Boruta Genes by Gender", x = "Gender", y = "log2 Expression") +
+      theme(legend.position = "none")
+  })
+  
+  ### Elastic Net (same as before, omitted for brevity)
+  enet_res <- eventReactive(input$run_enet, {
+    req(input$enet_gender)
+    data <- ml_data(input$enet_gender, input$enet_degs_only)
+    if (is.null(data)) return(NULL)
+    
+    X <- as.matrix(data[, -ncol(data)])
+    y <- ifelse(data$status == "rheumatoid arthritis", 1, 0)
+    
+    cvfit <- cv.glmnet(X, y, family = "binomial", alpha = input$alpha)
+    cvfit
+  })
+  
+  output$enet_params <- renderPrint({
+    fit <- enet_res()
+    req(fit)
+    cat("Elastic Net Alpha:", input$alpha, "\n")
+    cat("Lambda min:", fit$lambda.min, "\n")
+  })
+  
+  output$enet_genes <- renderDT({
+    fit <- enet_res()
+    req(fit)
+    coefs <- coef(fit, s = "lambda.min")
+    selected <- rownames(coefs)[coefs[, 1] != 0]
+    coefs_selected <- coefs[coefs[, 1] != 0, , drop = FALSE]
+    datatable(data.frame(Gene = selected, Coefficient = coefs_selected[,1]))
+  })
+  
+  ### RFE with CV (using random forest)
+  rfe_res <- eventReactive(input$run_rfe, {
+    req(input$rfe_gender)
+    data <- ml_data(input$rfe_gender, input$rfe_degs_only)
+    if (is.null(data)) return(NULL)
+    
+    X <- data[, -ncol(data)]
+    y <- data$status
+    ctrl <- rfeControl(functions = rfFuncs, method = "cv", number = 5)
+    rfe_out <- rfe(X, y, sizes = seq(5, 50, 5), rfeControl = ctrl)
+    rfe_out
+  })
+  
+  output$rfe_params <- renderPrint({
+    rfe <- rfe_res()
+    req(rfe)
+    cat("Sizes tried:", paste(rfe$results$Variables, collapse = ", "), "\n")
+    cat("Optimal variables:", rfe$optsize, "\n")
+  })
+  
+  output$rfe_genes <- renderDT({
+    rfe <- rfe_res()
+    req(rfe)
+    datatable(data.frame(SelectedGenes = predictors(rfe)))
+  })
+  
+  output$main_ui <- renderUI({
+    tabsetPanel(
+      id = "tabs",
+      tabPanel("Home",
+               h2("Welcome to the ArthOMix"),
+               p("Upload your data and run differential expression analysis."),
+               p("This web application supports datasets from various platforms (GPL570, GPL90, etc).")
+      ),
+      tabPanel("Analysis",
+               sidebarLayout(
+                 sidebarPanel(
+                   fileInput("expr_file", "Upload Expression Data (CSV with 'Gene_Symbol' as first column)", accept = ".csv"),
+                   fileInput("pheno_file", "Upload Phenotype Data (CSV with sample, gender, status columns)", accept = ".csv"),
+                   numericInput("logfc", "Log2 Fold Change Threshold", value = 0.5, min = 0, step = 0.1),
+                   numericInput("adjpval", "Adjusted P-value Threshold", value = 0.05, min = 0, max = 1, step = 0.01),
+                   actionButton("analyze", "Run Differential Expression")
+                 ),
+                 mainPanel(
+                   tabsetPanel(
+                     tabPanel("Expression Data", DTOutput("exprs_table")),
+                     tabPanel("Phenotype Data", DTOutput("pheno_table")),
+                     tabPanel("Female DEGs",
+                              textOutput("female_counts"),
+                              DTOutput("female_degs"),
+                              plotOutput("volcano_female"),
+                              downloadButton("download_female", "Download Female DEGs"),
+                              downloadButton("download_volcano_female", "Download Female Volcano")
+                     ),
+                     tabPanel("Male DEGs",
+                              textOutput("male_counts"),
+                              DTOutput("male_degs"),
+                              plotOutput("volcano_male"),
+                              downloadButton("download_male", "Download Male DEGs"),
+                              downloadButton("download_volcano_male", "Download Male Volcano")
+                     ),
+                     tabPanel("Summary", DTOutput("summary_table"))
+                   )
+                 )
+               )
+      ),
+      tabPanel("Machine Learning",
+               tabsetPanel(
+                 tabPanel("BorutaSHAP",
+                          sidebarLayout(
+                            sidebarPanel(
+                              radioButtons("boruta_gender", "Select sex:", choices = c("female", "male")),
+                              checkboxInput("boruta_degs_only", "Use DEGs only?", FALSE),
+                              actionButton("run_boruta", "Run BorutaSHAP")
+                            ),
+                            mainPanel(
+                              verbatimTextOutput("boruta_params"),
+                              DTOutput("boruta_genes"),
+                              hr(),
+                              h4("Boruta Attribute Statistics (Selected Features Only)"),
+                              DTOutput("boruta_importance"),
+                              hr(),
+                              h4("Boxplot of Top Boruta Genes Expression by Gender"),
+                              plotOutput("boruta_boxplot")
+                            )
+                          )
+                 ),
+                 tabPanel("Elastic Net",
+                          sidebarLayout(
+                            sidebarPanel(
+                              radioButtons("enet_gender", "Select sex:", choices = c("female", "male")),
+                              checkboxInput("enet_degs_only", "Use DEGs only?", FALSE),
+                              numericInput("alpha", "Elastic Net Alpha (0 = Ridge, 1 = LASSO)", 0.5, 0, 1, 0.1),
+                              actionButton("run_enet", "Run Elastic Net")
+                            ),
+                            mainPanel(
+                              verbatimTextOutput("enet_params"),
+                              DTOutput("enet_genes")
+                            )
+                          )
+                 ),
+                 tabPanel("RFE-CV",
+                          sidebarLayout(
+                            sidebarPanel(
+                              radioButtons("rfe_gender", "Select sex:", choices = c("female", "male")),
+                              checkboxInput("rfe_degs_only", "Use DEGs only?", FALSE),
+                              actionButton("run_rfe", "Run RFE with CV")
+                            ),
+                            mainPanel(
+                              verbatimTextOutput("rfe_params"),
+                              DTOutput("rfe_genes")
+                            )
+                          )
+                 )
+               )
+      )
+    )
+  })
+  
+}
+
+shinyApp(ui, server)
